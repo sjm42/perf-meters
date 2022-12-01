@@ -4,32 +4,43 @@ use conv::ValueFrom;
 use std::cmp::Ordering;
 use sysinfo::*;
 
+const SLOW_UPDATE: i64 = 5; // seconds
+
 #[derive(Debug)]
 pub struct MyStats {
     sys: System,
     refresh: RefreshKind,
     n_cpu: usize,
+    slow_update: i64,
+    slow_refresh: RefreshKind,
 }
 impl MyStats {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
         let refresh = RefreshKind::new()
-            .with_cpu(CpuRefreshKind::everything())
+            .with_cpu(CpuRefreshKind::new().with_cpu_usage())
+            .with_memory()
             .with_networks();
-        // .with_components()
-        // .with_memory()
-
         let n_cpu = sys.physical_core_count().unwrap_or(1);
+        let slow_update = time::OffsetDateTime::now_utc().unix_timestamp() + SLOW_UPDATE;
+        let slow_refresh = RefreshKind::new().with_components();
+
         MyStats {
             sys,
             refresh,
             n_cpu,
+            slow_update,
+            slow_refresh,
         }
     }
 
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
+        if time::OffsetDateTime::now_utc().unix_timestamp() > self.slow_update {
+            self.sys.refresh_specifics(self.slow_refresh);
+            self.slow_update = time::OffsetDateTime::now_utc().unix_timestamp() + SLOW_UPDATE;
+        }
     }
 
     pub fn sys(&self) -> &System {

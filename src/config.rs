@@ -14,12 +14,12 @@ pub struct OptsCommon {
 
     #[structopt(short, long, default_value = "/dev/VUmeter")]
     pub port: String,
-    #[structopt(short, long, default_value = "br0")]
-    pub interface: String,
     #[structopt(short, long, default_value = "5")]
     pub samplerate: f32,
     #[structopt(short, long, default_value = "100")]
     pub max_mbps: f32,
+    #[structopt(short, long)]
+    pub list_ports: bool,
 }
 impl OptsCommon {
     pub fn get_loglevel(&self) -> LevelFilter {
@@ -30,7 +30,7 @@ impl OptsCommon {
         } else if self.verbose {
             LevelFilter::Info
         } else {
-            LevelFilter::Error
+            LevelFilter::Warn
         }
     }
 

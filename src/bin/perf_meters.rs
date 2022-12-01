@@ -5,17 +5,27 @@
 
 use anyhow::bail;
 use log::*;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::{thread, time};
+use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
+use std::{io::Write, thread, time};
 use structopt::StructOpt;
 use sysinfo::*;
 
 use perf_meters::*;
 
+const BAUD_RATE: u32 = 115200;
+
 fn main() -> anyhow::Result<()> {
     let opts = OptsCommon::from_args();
     opts.start_pgm(env!("CARGO_BIN_NAME"));
+
+    if opts.list_ports {
+        warn!("Listing available serial ports");
+        for p in serialport::available_ports()? {
+            warn!("Port name: {}", &p.port_name);
+            warn!("     type: {:?}", &p.port_type);
+        }
+        return Ok(());
+    }
 
     let mut mystats = MyStats::new();
     let n_cpu = mystats.n_cpu();
@@ -49,7 +59,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     info!("Opening serial port {}", &opts.port);
-    let mut ser = OpenOptions::new().read(true).write(true).open(&opts.port)?;
+    let mut ser = serialport::new(opts.port, BAUD_RATE)
+        .parity(Parity::None)
+        .data_bits(DataBits::Eight)
+        .stop_bits(StopBits::One)
+        .flow_control(FlowControl::None)
+        .timeout(time::Duration::new(5, 0))
+        .open()?;
 
     info!("Vu sez hi (:");
     hello(&mut ser)?;
@@ -106,7 +122,7 @@ fn main() -> anyhow::Result<()> {
         // MEM stats + gauge
         let mem_pct = mystats.mem_usage();
         let mem_gauge = (2.56 * mem_pct).clamp(0.0, 255.0);
-        debug!("MEM gauge: {mem_gauge:.1}");
+        debug!("MEM gauge: {mem_gauge:.1} used: {mem_pct:.1} %");
 
         // TMP stats + gauge
         let tmp = mystats.sys_temp();
@@ -127,7 +143,7 @@ fn main() -> anyhow::Result<()> {
 const CHANNELS_NUM: usize = 192; // Remember: channel cmd byte has offset 0x30
 const MAX_DELTA: i16 = 96;
 
-fn set_vu(ser: &mut File, channel: u8, mut gauge: i16) -> anyhow::Result<()> {
+fn set_vu(ser: &mut Box<dyn SerialPort>, channel: u8, mut gauge: i16) -> anyhow::Result<()> {
     static mut LAST_VAL: [i16; CHANNELS_NUM] = [0; CHANNELS_NUM];
 
     let ch_i = channel as usize;
@@ -155,7 +171,7 @@ fn set_vu(ser: &mut File, channel: u8, mut gauge: i16) -> anyhow::Result<()> {
     Ok(ser.write_all(&cmd_buf)?)
 }
 
-fn hello(ser: &mut File) -> anyhow::Result<()> {
+fn hello(ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     for i in (0i16..=255)
         .chain((128..=255).rev())
         .chain(128..=255)

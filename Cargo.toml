@@ -11,8 +11,11 @@ anyhow = "1.0"
 conv = "0.3"
 env_logger = "0.10"
 log = "0.4"
+serialport = "4.2"
 structopt = "0.3"
 sysinfo = "0.26"
+time = "0.3"
+
 
 [build-dependencies]
 build-data = "0.1"
