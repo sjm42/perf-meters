@@ -124,16 +124,9 @@ fn main() -> anyhow::Result<()> {
         let mem_gauge = (2.56 * mem_pct).clamp(0.0, 255.0);
         debug!("MEM gauge: {mem_gauge:.1} used: {mem_pct:.1} %");
 
-        // TMP stats + gauge
-        let tmp = mystats.sys_temp();
-        // Use +40°C ... +90°C as the range 0..255
-        let tmp_gauge = (256.0 * ((tmp - 40.0) / 50.0)).clamp(0.0, 255.0);
-        debug!("TMP gauge: {tmp_gauge:.1} temp: {tmp:.1} °C");
-
         set_vu(&mut ser, 1, cpu_gauge as i16)?;
         set_vu(&mut ser, 2, net_gauge as i16)?;
         set_vu(&mut ser, 3, mem_gauge as i16)?;
-        set_vu(&mut ser, 4, tmp_gauge as i16)?;
 
         // keep the sample rate from drifting
         elapsed_ns = start.elapsed().as_nanos() as u32;

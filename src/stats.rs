@@ -4,15 +4,11 @@ use conv::ValueFrom;
 use std::cmp::Ordering;
 use sysinfo::*;
 
-const SLOW_UPDATE: i64 = 5; // seconds
-
 #[derive(Debug)]
 pub struct MyStats {
     sys: System,
     refresh: RefreshKind,
     n_cpu: usize,
-    slow_update: i64,
-    slow_refresh: RefreshKind,
 }
 impl MyStats {
     pub fn new() -> Self {
@@ -23,24 +19,16 @@ impl MyStats {
             .with_memory()
             .with_networks();
         let n_cpu = sys.physical_core_count().unwrap_or(1);
-        let slow_update = time::OffsetDateTime::now_utc().unix_timestamp() + SLOW_UPDATE;
-        let slow_refresh = RefreshKind::new().with_components();
 
         MyStats {
             sys,
             refresh,
             n_cpu,
-            slow_update,
-            slow_refresh,
         }
     }
 
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
-        if time::OffsetDateTime::now_utc().unix_timestamp() > self.slow_update {
-            self.sys.refresh_specifics(self.slow_refresh);
-            self.slow_update = time::OffsetDateTime::now_utc().unix_timestamp() + SLOW_UPDATE;
-        }
     }
 
     pub fn sys(&self) -> &System {
@@ -79,14 +67,6 @@ impl MyStats {
         let used = f64::value_from(self.sys.used_memory()).unwrap_or(0.0);
         let total = f64::value_from(self.sys.total_memory()).unwrap_or(0.0);
         100.0 * ((used / total) as f32)
-    }
-
-    pub fn sys_temp(&self) -> f32 {
-        let mut tmp = 0.0f32;
-        for comp in self.sys.components() {
-            tmp = tmp.max(comp.temperature());
-        }
-        tmp
     }
 }
 
