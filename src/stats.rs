@@ -63,6 +63,7 @@ impl MyStats {
         rx.saturating_sub(tx).saturating_mul(8)
     }
 
+    // return used memory as percentage
     pub fn mem_usage(&self) -> f32 {
         let used = f64::value_from(self.sys.used_memory()).unwrap_or(0.0);
         let total = f64::value_from(self.sys.total_memory()).unwrap_or(0.0);
