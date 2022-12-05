@@ -6,7 +6,10 @@
 use anyhow::bail;
 use log::*;
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
-use std::{io::Write, thread, time};
+use std::{
+    io::{self, Read, Write},
+    thread, time,
+};
 use structopt::StructOpt;
 use sysinfo::*;
 
@@ -25,6 +28,22 @@ fn main() -> anyhow::Result<()> {
             warn!("     type: {:?}", &p.port_type);
         }
         return Ok(());
+    }
+
+    info!("Opening serial port {}", &opts.port);
+    let mut ser = serialport::new(opts.port, BAUD_RATE)
+        .parity(Parity::None)
+        .data_bits(DataBits::Eight)
+        .stop_bits(StopBits::One)
+        .flow_control(FlowControl::None)
+        .timeout(time::Duration::new(5, 0))
+        .open()?;
+
+    info!("Vu sez hi (:");
+    hello(&mut ser)?;
+
+    if opts.calibrate {
+        return calibrate(&mut ser);
     }
 
     let mut mystats = MyStats::new();
@@ -57,18 +76,6 @@ fn main() -> anyhow::Result<()> {
             info!("disk: {disk:#?}");
         }
     }
-
-    info!("Opening serial port {}", &opts.port);
-    let mut ser = serialport::new(opts.port, BAUD_RATE)
-        .parity(Parity::None)
-        .data_bits(DataBits::Eight)
-        .stop_bits(StopBits::One)
-        .flow_control(FlowControl::None)
-        .timeout(time::Duration::new(5, 0))
-        .open()?;
-
-    info!("Vu sez hi (:");
-    hello(&mut ser)?;
 
     let mut elapsed_ns = 0;
     let sleep_ns: u32 = (1_000_000_000.0 / opts.samplerate) as u32;
@@ -133,6 +140,54 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
+fn hello(ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+    for i in (0i16..=255)
+        .chain((128..=255).rev())
+        .chain(128..=255)
+        .chain((0..=255).rev())
+    {
+        for c in 1u8..=3 {
+            set_vu(ser, c, i)?;
+        }
+        thread::sleep(time::Duration::new(0, 3_000_000));
+    }
+    Ok(())
+}
+
+fn calibrate(ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+    let mut chan: usize = 1;
+    let mut gauges = [1i16; 4];
+
+    let stdin = io::stdin().lock();
+    for c in stdin.bytes() {
+        let c = c?;
+        match c {
+            b'w' => {
+                chan += 1;
+            }
+            b's' => {
+                chan -= 1;
+            }
+            b'a' => {
+                gauges[chan] -= 1;
+            }
+            b'd' => {
+                gauges[chan] += 1;
+            }
+            _ => {}
+        }
+        chan = chan.clamp(1, 4);
+        gauges[chan] = gauges[chan].clamp(0, 255);
+
+        warn!(
+            "Gauges: [1]={:03} [2]={:03} [3]={:03} [4]={:03}",
+            gauges[0], gauges[1], gauges[2], gauges[3]
+        );
+        set_vu(ser, (chan + 1) as u8, gauges[chan])?;
+    }
+    Ok(())
+}
+
 const CHANNELS_NUM: usize = 192; // Remember: channel cmd byte has offset 0x30
 const MAX_DELTA: i16 = 96;
 
@@ -164,17 +219,4 @@ fn set_vu(ser: &mut Box<dyn SerialPort>, channel: u8, mut gauge: i16) -> anyhow:
     Ok(ser.write_all(&cmd_buf)?)
 }
 
-fn hello(ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
-    for i in (0i16..=255)
-        .chain((128..=255).rev())
-        .chain(128..=255)
-        .chain((0..=255).rev())
-    {
-        for c in 1u8..=3 {
-            set_vu(ser, c, i)?;
-        }
-        thread::sleep(time::Duration::new(0, 3_000_000));
-    }
-    Ok(())
-}
 // EOF

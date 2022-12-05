@@ -20,7 +20,10 @@ pub struct OptsCommon {
     pub max_mbps: f32,
     #[structopt(short, long)]
     pub list_ports: bool,
+    #[structopt(short, long)]
+    pub calibrate: bool,
 }
+
 impl OptsCommon {
     pub fn get_loglevel(&self) -> LevelFilter {
         if self.trace {
