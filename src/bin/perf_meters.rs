@@ -28,20 +28,29 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    info!("Opening serial port {}", &opts.port);
-    let mut ser = serialport::new(&opts.port, BAUD_RATE)
-        .parity(Parity::None)
-        .data_bits(DataBits::Eight)
-        .stop_bits(StopBits::One)
-        .flow_control(FlowControl::None)
-        .timeout(time::Duration::new(5, 0))
-        .open()?;
+    let mut serial = None;
+    if let Some(port) = &opts.port {
+        info!("Opening serial port {}", port);
+        serial = Some(
+            serialport::new(port, BAUD_RATE)
+                .parity(Parity::None)
+                .data_bits(DataBits::Eight)
+                .stop_bits(StopBits::One)
+                .flow_control(FlowControl::None)
+                .timeout(time::Duration::new(5, 0))
+                .open()?,
+        );
+    }
 
     info!("Vu sez hi (:");
-    hello(&opts, &mut ser)?;
+    if let Some(ser) = &mut serial {
+        hello(&opts, ser)?;
+    }
 
     if opts.calibrate {
-        calibrate(&opts, &mut ser)?;
+        if let Some(ser) = &mut serial {
+            calibrate(&opts, ser)?;
+        }
     }
 
     let mut mystats = MyStats::new();
@@ -160,10 +169,11 @@ fn main() -> anyhow::Result<()> {
         mem_gauge = mem_gauge.clamp(0.0, 255.0);
         let mem_pwm = (mem_pwm_min + (mem_gauge * mem_pwm_range / 256.0)).clamp(0.0, 255.0);
 
-        set_vu(&opts, &mut ser, 1, cpu_pwm as i16)?;
-        set_vu(&opts, &mut ser, 2, net_pwm as i16)?;
-        set_vu(&opts, &mut ser, 3, mem_pwm as i16)?;
-
+        if let Some(ser) = &mut serial {
+            set_vu(&opts, ser, 1, cpu_pwm as i16)?;
+            set_vu(&opts, ser, 2, net_pwm as i16)?;
+            set_vu(&opts, ser, 3, mem_pwm as i16)?;
+        }
         // keep the sample rate from drifting
         elapsed_ns = start.elapsed().as_nanos() as u32;
     }

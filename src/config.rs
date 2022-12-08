@@ -17,8 +17,8 @@ pub struct OptsCommon {
     #[structopt(short, long)]
     pub calibrate: bool,
 
-    #[structopt(short, long, default_value = "/dev/VUmeter")]
-    pub port: String,
+    #[structopt(short, long)]
+    pub port: Option<String>,
     #[structopt(short, long, default_value = "5")]
     pub samplerate: f32,
 

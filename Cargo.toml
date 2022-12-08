@@ -24,7 +24,9 @@ build-data = "0.1"
 
 [profile.release]
 lto = true
-opt-level = 3 #default
+# opt-level = 3 #default
 # opt-level = 'z'  # Optimize for size.
+debug = 0
+opt-level = 's'
 
 # EOF
