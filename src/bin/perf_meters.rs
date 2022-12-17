@@ -214,12 +214,12 @@ fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result
         match k {
             Key::ArrowRight => {
                 if chan < 3 {
-                    chan += 1;
+                    chan = chan.saturating_add(1);
                 }
             }
             Key::ArrowLeft => {
                 if chan > 0 {
-                    chan -= 1;
+                    chan = chan.saturating_sub(1);
                 }
             }
             Key::ArrowUp => {
