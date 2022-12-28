@@ -2,7 +2,7 @@
 
 [package]
 name = "perf_meters"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 resolver = "2"
 
@@ -25,9 +25,9 @@ build-data = "0.1"
 
 [profile.release]
 lto = true
-# opt-level = 3 #default
-# opt-level = 'z'  # Optimize for size.
 debug = 0
-opt-level = 's'
+opt-level = 's' # static
+# opt-level = 3   # default
+# opt-level = 'z' # Optimize for size.
 
 # EOF
