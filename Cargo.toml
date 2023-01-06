@@ -24,9 +24,10 @@ build-data = "0.1"
 
 
 [profile.release]
+codegen-units = 1
 lto = true
 debug = 0
-opt-level = 's' # static
+opt-level = 's'   # static
 # opt-level = 3   # default
 # opt-level = 'z' # Optimize for size.
 
