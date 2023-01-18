@@ -47,7 +47,23 @@ impl MyStats {
             usages.push(c.cpu_usage());
         }
         // Rust refuses to just sort() f32/f64, because NaN etc.
-        usages.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        usages.sort_by(|a, b| {
+            b.partial_cmp(a).unwrap_or_else(|| {
+                // to end up here, either or both of a/b must be NaN
+                if b.is_nan() {
+                    if a.is_nan() {
+                        // both are NaN
+                        Ordering::Equal
+                    } else {
+                        // only b is NaN
+                        Ordering::Less
+                    }
+                } else {
+                    // only a is NaN
+                    Ordering::Greater
+                }
+            })
+        });
         usages
     }
 
