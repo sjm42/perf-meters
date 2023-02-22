@@ -2,7 +2,7 @@
 
 [package]
 name = "perf_meters"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 resolver = "2"
 
@@ -15,7 +15,7 @@ env_logger = "0.10"
 log = "0.4"
 serialport = "4.2"
 structopt = "0.3"
-sysinfo = "0.27"
+sysinfo = "0.28"
 time = "0.3"
 
 
