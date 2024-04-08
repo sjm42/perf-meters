@@ -1,4 +1,4 @@
-// bin/perf-vumeter.rs
+// bin/perf-meters.rs
 
 // #![allow(unreachable_code)]
 // #![allow(dead_code)]
@@ -9,7 +9,6 @@ use log::*;
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use std::{io::Write, thread, time};
 use structopt::StructOpt;
-use sysinfo::*;
 
 use perf_meters::*;
 
@@ -71,16 +70,8 @@ fn main() -> anyhow::Result<()> {
             sys.available_memory() / 1024
         );
 
-        for (name, data) in sys.networks().iter() {
+        for (name, data) in mystats.networks().iter() {
             info!("NET iface: {name}\n    {data:#?}");
-        }
-
-        for comp in sys.components() {
-            info!("Component: {comp:#?}");
-        }
-
-        for disk in sys.disks() {
-            info!("disk: {disk:#?}");
         }
     }
 

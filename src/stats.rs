@@ -8,31 +8,39 @@ use sysinfo::*;
 pub struct MyStats {
     sys: System,
     refresh: RefreshKind,
+    networks: Networks,
     n_cpu: usize,
 }
+
 impl MyStats {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
         let refresh = RefreshKind::new()
             .with_cpu(CpuRefreshKind::new().with_cpu_usage())
-            .with_memory()
-            .with_networks();
+            .with_memory(MemoryRefreshKind::everything().without_swap());
+        let networks = Networks::new_with_refreshed_list();
         let n_cpu = sys.physical_core_count().unwrap_or(1);
 
         MyStats {
             sys,
             refresh,
+            networks,
             n_cpu,
         }
     }
 
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
+        self.networks.refresh();
     }
 
     pub fn sys(&self) -> &System {
         &self.sys
+    }
+
+    pub fn networks(&self) -> &Networks {
+        &self.networks
     }
 
     // number of cpu threads/cores
@@ -72,11 +80,11 @@ impl MyStats {
         let mut rx: i64 = 0;
         let mut tx: i64 = 0;
 
-        for (_iface, data) in self.sys.networks().iter() {
+        for (_iface, data) in self.networks.iter() {
             rx = rx.saturating_add(i64::try_from(data.received()).unwrap_or(0));
             tx = tx.saturating_add(i64::try_from(data.transmitted()).unwrap_or(0));
         }
-        rx.saturating_sub(tx).saturating_mul(8)
+        rx.saturating_add(tx).saturating_mul(8)
     }
 
     // return used memory as percentage
