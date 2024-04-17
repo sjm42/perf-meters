@@ -2,25 +2,25 @@
 
 [package]
 name = "perf_meters"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2021"
 resolver = "2"
 
 
 [dependencies]
-anyhow = "1.0"
-console = "0.15"
-conv = "0.3"
-env_logger = "0.11"
-log = "0.4"
-serialport = "4.3"
-structopt = "0.3"
-sysinfo = "0.30"
-time = "0.3"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+console = "0"
+conv = "0"
+serialport = "4"
+sysinfo = "0"
+time = "0"
+tracing = { version = "0", features = ["log"] }
+tracing-subscriber = "0"
 
 
 [build-dependencies]
-build-data = "0.1"
+build-data = "0"
 
 
 [profile.release]

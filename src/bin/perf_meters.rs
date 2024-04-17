@@ -3,19 +3,19 @@
 // #![allow(unreachable_code)]
 // #![allow(dead_code)]
 
+use std::{io::Write, thread, time};
+
 use anyhow::bail;
 use console::{Key, Term};
-use log::*;
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
-use std::{io::Write, thread, time};
-use structopt::StructOpt;
 
 use perf_meters::*;
 
 const BAUD_RATE: u32 = 115200;
 
+
 fn main() -> anyhow::Result<()> {
-    let opts = OptsCommon::from_args();
+    let opts = OptsCommon::parse();
     opts.start_pgm(env!("CARGO_BIN_NAME"));
 
     if opts.list_ports {
@@ -151,7 +151,7 @@ fn main() -> anyhow::Result<()> {
             };
             net_pwm_zero + net_gauge * range / 256.0
         }
-        .clamp(0.0, 255.0);
+            .clamp(0.0, 255.0);
 
         // CHAN3 - MEM stats + gauge
         let mem_pct = mystats.mem_usage();
@@ -170,6 +170,7 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
+
 fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     for i in (0i16..=255)
         .chain((128..=255).rev())
@@ -183,6 +184,7 @@ fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()>
     }
     Ok(())
 }
+
 
 fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     let mut chan: usize = 0;
@@ -229,6 +231,7 @@ fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result
     }
 }
 
+
 const CHANNELS_NUM: usize = 192; // Remember: channel cmd byte has offset 0x30
 
 fn set_vu(
@@ -263,5 +266,4 @@ fn set_vu(
     let cmd_buf: [u8; 4] = [0xFD, 0x02, 0x30 + channel, cmd_value];
     Ok(ser.write_all(&cmd_buf)?)
 }
-
 // EOF

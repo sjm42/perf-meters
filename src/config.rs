@@ -1,70 +1,70 @@
 // startup.rs
 
-use log::*;
-use structopt::StructOpt;
+use crate::*;
 
-#[derive(Debug, Default, StructOpt)]
+#[derive(Debug, Default, Parser)]
 pub struct OptsCommon {
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub verbose: bool,
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub debug: bool,
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub trace: bool,
 
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub list_ports: bool,
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub calibrate: bool,
 
-    #[structopt(short, long)]
+    #[arg(short, long)]
     pub port: Option<String>,
-    #[structopt(short, long, default_value = "5")]
+    #[arg(short, long, default_value_t = 5.0)]
     pub samplerate: f32,
 
-    #[structopt(long, default_value = "32")]
+    #[arg(long, default_value_t = 32)]
     pub pwm_max_delta: i16,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0.0)]
     pub cpu_pwm_min: f32,
-    #[structopt(long, default_value = "255")]
+    #[arg(long, default_value_t = 255.0)]
     pub cpu_pwm_max: f32,
 
-    #[structopt(long)]
+    #[arg(long)]
     pub net_gauge_abs: bool,
-    #[structopt(long, default_value = "100")]
+    #[arg(long, default_value_t = 100.0)]
     pub net_gauge_mbps: f32,
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0.0)]
     pub net_pwm_min: f32,
-    #[structopt(long, default_value = "128")]
+    #[arg(long, default_value_t = 128.0)]
     pub net_pwm_zero: f32,
-    #[structopt(long, default_value = "255")]
+    #[arg(long, default_value_t = 255.0)]
     pub net_pwm_max: f32,
 
-    #[structopt(long, default_value = "0")]
+    #[arg(long, default_value_t = 0.0)]
     pub mem_pwm_min: f32,
-    #[structopt(long, default_value = "255")]
+    #[arg(long, default_value_t = 255.0)]
     pub mem_pwm_max: f32,
 }
 
 impl OptsCommon {
-    pub fn get_loglevel(&self) -> LevelFilter {
+    pub fn get_loglevel(&self) -> Level {
         if self.trace {
-            LevelFilter::Trace
+            Level::TRACE
         } else if self.debug {
-            LevelFilter::Debug
+            Level::DEBUG
         } else if self.verbose {
-            LevelFilter::Info
+            Level::INFO
         } else {
-            LevelFilter::Warn
+            Level::ERROR
         }
     }
 
+
     pub fn start_pgm(&self, name: &str) {
-        env_logger::Builder::new()
-            .filter_module(env!("CARGO_PKG_NAME"), self.get_loglevel())
-            .filter_module(name, self.get_loglevel())
-            .format_timestamp_secs()
+        tracing_subscriber::fmt()
+            .with_max_level(self.get_loglevel())
+            .with_target(false)
             .init();
+
         info!("Starting up {name} v{}...", env!("CARGO_PKG_VERSION"));
         debug!("Git branch: {}", env!("GIT_BRANCH"));
         debug!("Git commit: {}", env!("GIT_COMMIT"));
@@ -72,5 +72,4 @@ impl OptsCommon {
         debug!("Compiler version: {}", env!("RUSTC_VERSION"));
     }
 }
-
 // EOF
