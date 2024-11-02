@@ -161,9 +161,9 @@ fn main() -> anyhow::Result<()> {
         let mem_pwm = (mem_pwm_min + (mem_gauge * mem_pwm_range / 256.0)).clamp(0.0, 255.0);
 
         if let Some(ser) = &mut serial {
-            set_vu(&opts, ser, 1, cpu_pwm as i16)?;
-            set_vu(&opts, ser, 2, net_pwm as i16)?;
-            set_vu(&opts, ser, 3, mem_pwm as i16)?;
+            set_vu(&opts, ser, 0, cpu_pwm as i16)?;
+            set_vu(&opts, ser, 1, net_pwm as i16)?;
+            set_vu(&opts, ser, 2, mem_pwm as i16)?;
         }
         // keep the sample rate from drifting
         elapsed_ns = start.elapsed().as_nanos() as u32;
