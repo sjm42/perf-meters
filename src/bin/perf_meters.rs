@@ -158,9 +158,7 @@ fn main() -> anyhow::Result<()> {
 
         // CHAN2 - disk IO
         let disk_io = mystats.disk_io();
-        // info!("Disk IO r+w {} KiB", disk_io / 1024);
-        // scale is 100 MiB = 100 * 1024 * 1024 = 104857600
-        let dsk_pwm = 256.0 * ((disk_io as f32) / 104_857_600.0).clamp(0.0, 255.0);
+        let dsk_pwm = 256.0 * ((disk_io as f32) / 102_400.0).clamp(0.0, 255.0);
 
 
         // CHAN3 - MEM stats + gauge

@@ -1,10 +1,82 @@
 // stats.rs
 
 use conv::ValueFrom;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashMap, fs::File, io::{self, BufRead}, time};
 use sysinfo::*;
 
 use crate::*;
+
+const DISK_STATS: &str = "/proc/diskstats";
+
+
+#[derive(Debug)]
+pub struct DiskStats {
+    prev_ts: time::Instant,
+    prev_stats: HashMap<String, (i64, i64)>,
+    rates: Vec<f64>,
+}
+
+impl DiskStats {
+    pub fn new() -> anyhow::Result<Self> {
+        Ok(Self {
+            prev_ts: time::Instant::now(),
+            prev_stats: Self::read_diskstats()?,
+            rates: Vec::new(),
+        })
+    }
+
+    pub fn refresh(&mut self) -> anyhow::Result<()> {
+        self.rates = self.diskrates()?;
+        Ok(())
+    }
+
+    pub fn rates(&self) -> &Vec<f64> {
+        &self.rates
+    }
+
+    fn diskrates(&mut self) -> anyhow::Result<Vec<f64>> {
+        let us = self.prev_ts.elapsed().as_micros();
+        self.prev_ts = time::Instant::now();
+
+        let stats = Self::read_diskstats()?;
+        let mut rates = Vec::with_capacity(stats.len());
+
+        for (k, v) in &stats {
+            match self.prev_stats.get(k) {
+                None => continue,
+                Some(prev) => {
+                    let sect_rd = v.0 - prev.0;
+                    let sect_wrt = v.1 - prev.1;
+                    rates.push((sect_rd + sect_wrt) as f64 * 1_000_000.0 / us as f64);
+                }
+            }
+        }
+        // Rust refuses to just sort() f64, because NaN, Inf etc.
+        rates.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        self.prev_stats = stats;
+        Ok(rates)
+    }
+
+    // https://www.kernel.org/doc/Documentation/ABI/testing/procfs-diskstats
+    fn read_diskstats() -> anyhow::Result<HashMap<String, (i64, i64)>> {
+        let mut stats = HashMap::with_capacity(32);
+        for line in io::BufReader::new(File::open(DISK_STATS)?).lines() {
+            let line = line?;
+            let items = line.split_ascii_whitespace().collect::<Vec<&str>>();
+            let devname = items[2];
+            // collect sectors read and sectors written from "sd?" and "nvme???"
+            if devname.starts_with("sd") && devname.len() == 3
+                || devname.starts_with("nvme") && devname.len() == 7
+            {
+                let sect_rd = items[5].parse::<i64>()?;
+                let sect_wrt = items[9].parse::<i64>()?;
+                stats.insert(devname.into(), (sect_rd, sect_wrt));
+            }
+        }
+        Ok(stats)
+    }
+}
+
 
 #[derive(Debug)]
 pub struct MyStats {
@@ -12,6 +84,7 @@ pub struct MyStats {
     refresh: RefreshKind,
     networks: Networks,
     n_cpu: usize,
+    diskstats: DiskStats,
 }
 
 impl MyStats {
@@ -23,19 +96,23 @@ impl MyStats {
             .with_memory(MemoryRefreshKind::everything().without_swap());
         let networks = Networks::new_with_refreshed_list();
         let n_cpu = sys.physical_core_count().unwrap_or(1);
+        let diskstats = DiskStats::new().expect("Unable to get disk statistics");
 
         MyStats {
             sys,
             refresh,
             networks,
             n_cpu,
+            diskstats,
         }
     }
 
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
         self.networks.refresh();
-        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::new().with_disk_usage());
+        if let Err(e) = self.diskstats.refresh() {
+            error!("Error refreshing diskstats: {e} (ignored)");
+        }
     }
 
     pub fn sys(&self) -> &System {
@@ -78,17 +155,6 @@ impl MyStats {
         usages
     }
 
-    // return number of bytes read+written
-    pub fn disk_io(&self) -> u64 {
-        let (mut b_rd, mut b_wr) = (0, 0);
-        for process in self.sys.processes().values() {
-            b_rd += process.disk_usage().read_bytes;
-            b_wr += process.disk_usage().written_bytes;
-        }
-        info!("Disk IO rd {} wr {} KiB", b_rd/1024, b_wr/1024);
-        b_rd + b_wr
-    }
-
     // return number of bits transferred
     pub fn net_bits(&self) -> i64 {
         let mut rx: i64 = 0;
@@ -100,6 +166,16 @@ impl MyStats {
         }
         rx.saturating_add(tx).saturating_mul(8)
     }
+
+    // return sectors read+written on the most active disk
+    pub fn disk_io(&self) -> f64 {
+        match self.diskstats.rates.first()
+        {
+            None => 0.0,
+            Some(r) => *r
+        }
+    }
+
 
     // return used memory as percentage
     pub fn mem_usage(&self) -> f32 {
