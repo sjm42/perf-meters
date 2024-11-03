@@ -4,6 +4,8 @@ use conv::ValueFrom;
 use std::cmp::Ordering;
 use sysinfo::*;
 
+use crate::*;
+
 #[derive(Debug)]
 pub struct MyStats {
     sys: System,
@@ -33,6 +35,7 @@ impl MyStats {
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
         self.networks.refresh();
+        self.sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::new().with_disk_usage());
     }
 
     pub fn sys(&self) -> &System {
@@ -75,7 +78,18 @@ impl MyStats {
         usages
     }
 
-    // return number of bits transferred since last sample
+    // return number of bytes read+written
+    pub fn disk_io(&self) -> u64 {
+        let (mut b_rd, mut b_wr) = (0, 0);
+        for process in self.sys.processes().values() {
+            b_rd += process.disk_usage().read_bytes;
+            b_wr += process.disk_usage().written_bytes;
+        }
+        info!("Disk IO rd {} wr {} KiB", b_rd/1024, b_wr/1024);
+        b_rd + b_wr
+    }
+
+    // return number of bits transferred
     pub fn net_bits(&self) -> i64 {
         let mut rx: i64 = 0;
         let mut tx: i64 = 0;

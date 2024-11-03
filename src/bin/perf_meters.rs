@@ -101,7 +101,8 @@ fn main() -> anyhow::Result<()> {
         debug!("Last elapsed: {} µs", elapsed_ns / 1000);
         mystats.refresh();
 
-        // CHAN1 - CPU stats + gauge, rates are sorted largest first
+
+        // CHAN0 - CPU stats + gauge, rates are sorted largest first
         let cpu_rates = mystats.cpu_usage();
         let mut cpu_gauge = if n_cpu >= 2 {
             (cpu_rates[0] + cpu_rates[1]) / 2.0
@@ -130,7 +131,8 @@ fn main() -> anyhow::Result<()> {
         cpu_gauge = cpu_gauge.clamp(0.0, 255.0);
         let cpu_pwm = (cpu_pwm_min + (cpu_gauge * cpu_pwm_range / 256.0)).clamp(0.0, 255.0);
 
-        // CHAN2 - NET stats + gauge
+
+        // CHAN1 - NET stats + gauge
         let mut net_rate = mystats.net_bits();
         if opts.net_gauge_abs {
             net_rate = net_rate.abs();
@@ -153,6 +155,14 @@ fn main() -> anyhow::Result<()> {
         }
             .clamp(0.0, 255.0);
 
+
+        // CHAN2 - disk IO
+        let disk_io = mystats.disk_io();
+        // info!("Disk IO r+w {} KiB", disk_io / 1024);
+        // scale is 100 MiB = 100 * 1024 * 1024 = 104857600
+        let dsk_pwm = 256.0 * ((disk_io as f32) / 104_857_600.0).clamp(0.0, 255.0);
+
+
         // CHAN3 - MEM stats + gauge
         let mem_pct = mystats.mem_usage();
         let mut mem_gauge = 2.56 * mem_pct;
@@ -163,7 +173,8 @@ fn main() -> anyhow::Result<()> {
         if let Some(ser) = &mut serial {
             set_vu(&opts, ser, 0, cpu_pwm as i16)?;
             set_vu(&opts, ser, 1, net_pwm as i16)?;
-            set_vu(&opts, ser, 2, mem_pwm as i16)?;
+            set_vu(&opts, ser, 2, dsk_pwm as i16)?;
+            set_vu(&opts, ser, 3, mem_pwm as i16)?;
         }
         // keep the sample rate from drifting
         elapsed_ns = start.elapsed().as_nanos() as u32;
@@ -177,7 +188,7 @@ fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()>
         .chain(128..=255)
         .chain((0..=255).rev())
     {
-        for c in 1u8..=3 {
+        for c in 0u8..=3 {
             set_vu(opts, ser, c, i)?;
         }
         thread::sleep(time::Duration::new(0, 3_000_000));
