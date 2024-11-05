@@ -119,17 +119,18 @@ fn main() -> anyhow::Result<()> {
             cpu_gauge *= 2.56;
         }
         // deliberately print out cpu gauge without clamping yet
+        cpu_gauge = cpu_gauge.clamp(0.0, 255.0);
+        let cpu_pwm = (cpu_pwm_min + (cpu_gauge * cpu_pwm_range / 256.0)).clamp(0.0, 255.0);
         debug!(
-            "CPU gauge: {cpu_gauge:.1} -- {list}",
+            "CPU gauge: {cpu_gauge:.1}, pwm: {cpu_pwm:.0} -- {list}",
             list = cpu_rates
                 .iter()
+                .take(4)
                 .map(|a| format!("{a:.1}"))
                 .collect::<Vec<String>>()
                 .join(" ")
                 .as_str()
         );
-        cpu_gauge = cpu_gauge.clamp(0.0, 255.0);
-        let cpu_pwm = (cpu_pwm_min + (cpu_gauge * cpu_pwm_range / 256.0)).clamp(0.0, 255.0);
 
 
         // CHAN1 - NET stats + gauge
@@ -138,10 +139,6 @@ fn main() -> anyhow::Result<()> {
             net_rate = net_rate.abs();
         }
         let mut net_gauge = 256.0 * (((net_rate as f32) / 1_000_000.0) / opts.net_gauge_mbps);
-        debug!(
-            "NET gauge: {net_gauge:.1} rate: {rate} kbps",
-            rate = net_rate / 1000,
-        );
         net_gauge = net_gauge.clamp(-255.0, 255.0);
         let net_pwm = if opts.net_gauge_abs {
             net_pwm_min + (net_gauge * net_pwm_frange / 256.0)
@@ -154,19 +151,23 @@ fn main() -> anyhow::Result<()> {
             net_pwm_zero + net_gauge * range / 256.0
         }
             .clamp(0.0, 255.0);
+        debug!(
+            "NET rate: {rate} kbps, gauge: {net_gauge:.0}, pwm: {net_pwm:.0}",
+            rate = net_rate / 1000,
+        );
 
 
         // CHAN2 - disk IO
         let disk_io = mystats.disk_io();
         let dsk_pwm = 256.0 * ((disk_io as f32) / 102_400.0).clamp(0.0, 255.0);
-
+        debug!("DSK pwm: {dsk_pwm:.0}");
 
         // CHAN3 - MEM stats + gauge
         let mem_pct = mystats.mem_usage();
         let mut mem_gauge = 2.56 * mem_pct;
-        debug!("MEM gauge: {mem_gauge:.1} used: {mem_pct:.1} %");
         mem_gauge = mem_gauge.clamp(0.0, 255.0);
         let mem_pwm = (mem_pwm_min + (mem_gauge * mem_pwm_range / 256.0)).clamp(0.0, 255.0);
+        debug!("MEM used: {mem_pct:.1}%, gauge: {mem_gauge:.0}, pwm: {mem_pwm:.0}");
 
         if let Some(ser) = &mut serial {
             set_vu(&opts, ser, 0, cpu_pwm as i16)?;

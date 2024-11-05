@@ -155,7 +155,7 @@ impl MyStats {
         usages
     }
 
-    // return number of bits transferred
+    // return number of net bits transferred -- i.e. RX minus TX
     pub fn net_bits(&self) -> i64 {
         let mut rx: i64 = 0;
         let mut tx: i64 = 0;
@@ -164,7 +164,7 @@ impl MyStats {
             rx = rx.saturating_add(i64::try_from(data.received()).unwrap_or(0));
             tx = tx.saturating_add(i64::try_from(data.transmitted()).unwrap_or(0));
         }
-        rx.saturating_add(tx).saturating_mul(8)
+        rx.saturating_sub(tx).saturating_mul(8)
     }
 
     // return sectors read+written on the most active disk
