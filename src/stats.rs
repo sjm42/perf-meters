@@ -91,8 +91,8 @@ impl MyStats {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
-        let refresh = RefreshKind::new()
-            .with_cpu(CpuRefreshKind::new().with_cpu_usage())
+        let refresh = RefreshKind::nothing()
+            .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
             .with_memory(MemoryRefreshKind::everything().without_swap());
         let networks = Networks::new_with_refreshed_list();
         let n_cpu = sys.physical_core_count().unwrap_or(1);
@@ -109,7 +109,7 @@ impl MyStats {
 
     pub fn refresh(&mut self) {
         self.sys.refresh_specifics(self.refresh);
-        self.networks.refresh();
+        self.networks.refresh(true);
         if let Err(e) = self.diskstats.refresh() {
             error!("Error refreshing diskstats: {e} (ignored)");
         }
