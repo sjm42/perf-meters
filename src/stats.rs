@@ -1,13 +1,18 @@
 // stats.rs
 
 use conv::ValueFrom;
-use std::{cmp::Ordering, collections::HashMap, fs::File, io::{self, BufRead}, time};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fs::File,
+    io::{self, BufRead},
+    time,
+};
 use sysinfo::*;
 
 use crate::*;
 
 const DISK_STATS: &str = "/proc/diskstats";
-
 
 #[derive(Debug)]
 pub struct DiskStats {
@@ -77,7 +82,6 @@ impl DiskStats {
     }
 }
 
-
 #[derive(Debug)]
 pub struct MyStats {
     sys: System,
@@ -95,7 +99,7 @@ impl MyStats {
             .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
             .with_memory(MemoryRefreshKind::everything().without_swap());
         let networks = Networks::new_with_refreshed_list();
-        let n_cpu = sys.physical_core_count().unwrap_or(1);
+        let n_cpu = System::physical_core_count().unwrap_or(1);
         let diskstats = DiskStats::new().expect("Unable to get disk statistics");
 
         MyStats {
@@ -169,13 +173,11 @@ impl MyStats {
 
     // return sectors read+written on the most active disk
     pub fn disk_io(&self) -> f64 {
-        match self.diskstats.rates.first()
-        {
+        match self.diskstats.rates.first() {
             None => 0.0,
-            Some(r) => *r
+            Some(r) => *r,
         }
     }
-
 
     // return used memory as percentage
     pub fn mem_usage(&self) -> f32 {

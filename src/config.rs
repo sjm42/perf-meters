@@ -58,7 +58,6 @@ impl OptsCommon {
         }
     }
 
-
     pub fn start_pgm(&self, name: &str) {
         tracing_subscriber::fmt()
             .with_max_level(self.get_loglevel())

@@ -13,7 +13,6 @@ use perf_meters::*;
 
 const BAUD_RATE: u32 = 115200;
 
-
 fn main() -> anyhow::Result<()> {
     let opts = OptsCommon::parse();
     opts.start_pgm(env!("CARGO_BIN_NAME"));
@@ -57,7 +56,7 @@ fn main() -> anyhow::Result<()> {
 
     {
         let sys = mystats.sys();
-        info!("CPU core count: {}", sys.physical_core_count().unwrap_or(0));
+        info!("CPU core count: {n_cpu}");
         sys.cpus()
             .iter()
             .enumerate()
@@ -101,7 +100,6 @@ fn main() -> anyhow::Result<()> {
         debug!("Last elapsed: {} µs", elapsed_ns / 1000);
         mystats.refresh();
 
-
         // CHAN0 - CPU stats + gauge, rates are sorted largest first
         let cpu_rates = mystats.cpu_usage();
         let mut cpu_gauge = if n_cpu >= 2 {
@@ -132,7 +130,6 @@ fn main() -> anyhow::Result<()> {
                 .as_str()
         );
 
-
         // CHAN1 - NET stats + gauge
         let mut net_rate = mystats.net_bits();
         if opts.net_gauge_abs {
@@ -155,7 +152,6 @@ fn main() -> anyhow::Result<()> {
             "NET rate: {rate} kbps, gauge: {net_gauge:.0}, pwm: {net_pwm:.0}",
             rate = net_rate / 1000,
         );
-
 
         // CHAN2 - disk IO
         let disk_io = mystats.disk_io();
@@ -180,7 +176,6 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-
 fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     for i in (0i16..=255)
         .chain((128..=255).rev())
@@ -194,7 +189,6 @@ fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()>
     }
     Ok(())
 }
-
 
 fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     let mut chan: usize = 0;
@@ -240,7 +234,6 @@ fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result
         gauges[chan] = gauges[chan].clamp(0, 255);
     }
 }
-
 
 const CHANNELS_NUM: usize = 192; // Remember: channel cmd byte has offset 0x30
 
