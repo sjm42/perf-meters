@@ -2,7 +2,7 @@
 
 [package]
 name = "perf_meters"
-version = "1.2.3"
+version = "1.2.4"
 edition = "2021"
 resolver = "2"
 
@@ -19,6 +19,7 @@ tracing-subscriber = "0"
 
 
 [build-dependencies]
+anyhow = "1"
 build-data = "0"
 
 
