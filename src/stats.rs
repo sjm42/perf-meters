@@ -1,6 +1,5 @@
 // stats.rs
 
-use conv::ValueFrom;
 use std::{
     cmp::Ordering,
     collections::HashMap,
@@ -8,6 +7,8 @@ use std::{
     io::{self, BufRead},
     time,
 };
+
+use conv::ValueFrom;
 use sysinfo::*;
 
 use crate::*;
@@ -70,9 +71,7 @@ impl DiskStats {
             let items = line.split_ascii_whitespace().collect::<Vec<&str>>();
             let devname = items[2];
             // collect sectors read and sectors written from "sd?" and "nvme???"
-            if devname.starts_with("sd") && devname.len() == 3
-                || devname.starts_with("nvme") && devname.len() == 7
-            {
+            if devname.starts_with("sd") && devname.len() == 3 || devname.starts_with("nvme") && devname.len() == 7 {
                 let sect_rd = items[5].parse::<i64>()?;
                 let sect_wrt = items[9].parse::<i64>()?;
                 stats.insert(devname.into(), (sect_rd, sect_wrt));

@@ -1,11 +1,7 @@
 // bin/perf-meters.rs
 
-// #![allow(unreachable_code)]
-// #![allow(dead_code)]
+use std::{thread, time};
 
-use std::{io::Write, thread, time};
-
-use anyhow::bail;
 use console::{Key, Term};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 
@@ -26,29 +22,25 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut serial = None;
-    if let Some(port) = &opts.port {
-        info!("Opening serial port {}", port);
-        serial = Some(
-            serialport::new(port, BAUD_RATE)
-                .parity(Parity::None)
-                .data_bits(DataBits::Eight)
-                .stop_bits(StopBits::One)
-                .flow_control(FlowControl::None)
-                .timeout(time::Duration::new(5, 0))
-                .open()?,
-        );
-    }
+    let port = match opts.port {
+        None => anyhow::bail!("No port specified"),
+        Some(p) => p,
+    };
 
+    info!("Opening serial port {}", port);
+    let mut serial = serialport::new(port, BAUD_RATE)
+        .parity(Parity::None)
+        .data_bits(DataBits::Eight)
+        .stop_bits(StopBits::One)
+        .flow_control(FlowControl::None)
+        .timeout(time::Duration::new(5, 0))
+        .open()?;
+    let mut vu = Vu::new(opts.pwm_max_delta);
     info!("Vu sez hi (:");
-    if let Some(ser) = &mut serial {
-        hello(&opts, ser)?;
-    }
+    hello(&mut vu, &mut serial)?;
 
     if opts.calibrate {
-        if let Some(ser) = &mut serial {
-            calibrate(&opts, ser)?;
-        }
+        return calibrate(&mut vu, &mut serial);
     }
 
     let mut mystats = MyStats::new();
@@ -165,65 +157,54 @@ fn main() -> anyhow::Result<()> {
         let mem_pwm = (mem_pwm_min + (mem_gauge * mem_pwm_range / 256.0)).clamp(0.0, 255.0);
         debug!("MEM used: {mem_pct:.1}%, gauge: {mem_gauge:.0}, pwm: {mem_pwm:.0}");
 
-        if let Some(ser) = &mut serial {
-            set_vu(&opts, ser, 0, cpu_pwm as i16)?;
-            set_vu(&opts, ser, 1, net_pwm as i16)?;
-            set_vu(&opts, ser, 2, dsk_pwm as i16)?;
-            set_vu(&opts, ser, 3, mem_pwm as i16)?;
-        }
+        vu.set(&mut serial, Channel::Ch0, cpu_pwm as i16)?;
+        vu.set(&mut serial, Channel::Ch1, net_pwm as i16)?;
+        vu.set(&mut serial, Channel::Ch2, dsk_pwm as i16)?;
+        vu.set(&mut serial, Channel::Ch3, mem_pwm as i16)?;
+
         // keep the sample rate from drifting
         elapsed_ns = start.elapsed().as_nanos() as u32;
     }
 }
 
-fn hello(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+fn hello(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     for i in (0i16..=255)
         .chain((128..=255).rev())
         .chain(128..=255)
         .chain((0..=255).rev())
     {
-        for c in 0u8..=3 {
-            set_vu(opts, ser, c, i)?;
+        for c in [Channel::Ch0, Channel::Ch1, Channel::Ch2] {
+            vu.set(ser, c, i)?;
         }
         thread::sleep(time::Duration::new(0, 3_000_000));
     }
     Ok(())
 }
 
-fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
-    let mut chan: usize = 0;
-    let mut gauges = [1i16; 4];
+fn calibrate(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+    let mut chan = Channel::Ch0;
+    let mut gauges: [i16; N_CHANS] = [1; _];
     warn!("Entering calibration mode.\r\nUse arrow keys left/right to change channel.\r\nUse up/down to move gauge.");
     warn!("Press Esc to quit.");
     let term = Term::stdout();
     loop {
-        eprint!(
-            "\rChan: {} gauges: [1]={:03} [2]={:03} [3]={:03} [4]={:03}",
-            chan + 1,
-            gauges[0],
-            gauges[1],
-            gauges[2],
-            gauges[3]
-        );
-        set_vu(opts, ser, (chan + 1) as u8, gauges[chan])?;
+        eprint!("\rChan: {chan:?} gauges: {gauges:?}");
+        let chan_i = chan as usize;
+        vu.set(ser, chan, gauges[chan_i])?;
 
         let k = term.read_key()?;
         match k {
             Key::ArrowRight => {
-                if chan < 3 {
-                    chan = chan.saturating_add(1);
-                }
+                chan = chan.next();
             }
             Key::ArrowLeft => {
-                if chan > 0 {
-                    chan = chan.saturating_sub(1);
-                }
+                chan = chan.prev();
             }
             Key::ArrowUp => {
-                gauges[chan] += 1;
+                gauges[chan_i] += 1;
             }
             Key::ArrowDown => {
-                gauges[chan] -= 1;
+                gauges[chan_i] -= 1;
             }
             Key::Escape => {
                 warn!("Exiting calibration mode.");
@@ -231,42 +212,8 @@ fn calibrate(opts: &OptsCommon, ser: &mut Box<dyn SerialPort>) -> anyhow::Result
             }
             _ => {}
         }
-        gauges[chan] = gauges[chan].clamp(0, 255);
+        gauges[chan_i] = gauges[chan_i].clamp(1, 255);
     }
 }
 
-const CHANNELS_NUM: usize = 192; // Remember: channel cmd byte has offset 0x30
-
-fn set_vu(
-    opts: &OptsCommon,
-    ser: &mut Box<dyn SerialPort>,
-    channel: u8,
-    mut pwm: i16,
-) -> anyhow::Result<()> {
-    static mut LAST_VAL: [i16; CHANNELS_NUM] = [0; CHANNELS_NUM];
-
-    let ch_i = channel as usize;
-    if ch_i >= CHANNELS_NUM {
-        bail!(
-            "Channel number too large: {ch_i} (maximum {}",
-            CHANNELS_NUM - 1
-        );
-    }
-
-    // limit to gauge values between 0..255
-    pwm = pwm.clamp(0, 255);
-
-    // do some smoothing -- only move the gauge MAX_DELTA at once
-    let delta = unsafe { pwm - LAST_VAL[ch_i] };
-    let delta_sig = delta.signum();
-    let delta_trunc = delta.abs().min(opts.pwm_max_delta);
-    let new_value = unsafe { LAST_VAL[ch_i] + delta_sig * delta_trunc };
-    unsafe {
-        LAST_VAL[ch_i] = new_value;
-    }
-    let cmd_value = new_value.clamp(0, 255) as u8;
-
-    let cmd_buf: [u8; 4] = [0xFD, 0x02, 0x30 + channel, cmd_value];
-    Ok(ser.write_all(&cmd_buf)?)
-}
 // EOF
