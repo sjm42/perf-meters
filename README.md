@@ -60,6 +60,26 @@ perf_meters [OPTIONS]
 | `-d, --debug` | Debug-level logging | |
 | `-t, --trace` | Trace-level logging | |
 
+## Build and Development
+
+This repository uses the stable Rust toolchain configured in `rust-toolchain.toml`.
+
+```bash
+cargo fmt                             # format with rustfmt.toml
+cargo check                           # fast compile check
+cargo test                            # run unit and integration tests
+cargo clippy --all-targets --all-features
+cargo outdated --root-deps-only       # check direct dependency updates
+cargo build --release                 # optimized binary
+```
+
+For local hardware testing, list ports first:
+
+```bash
+cargo run -- --list-ports
+cargo run -- -v --port /dev/ttyUSB0
+```
+
 ### Calibration Mode
 
 With `--calibrate`, use arrow keys to adjust individual channel PWM values interactively:
