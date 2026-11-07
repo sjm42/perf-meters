@@ -2,9 +2,9 @@
 
 A tiny program to control analog VU meters hooked up with USB.
 
-It works on Linux and Windows 7/10/11 (tested, binary was built in Windows 10).
+The application targets Linux and Windows, using `sysinfo` for host metrics.
 
-Other OSes are supported as per what sysinfo crate is able to support.
+Other platforms depend on support provided by `sysinfo` and `serialport`.
 
 The firmware for the microcontroller can be found here: <https://github.com/sjm42/vumeter-usb>
 
@@ -16,7 +16,7 @@ The program drives 4 analog gauge channels over a serial connection at 115200 ba
 |---------|--------|-------------|
 | Ch0 | CPU | Weighted average of the busiest cores |
 | Ch1 | Network | Net bit rate (RX - TX), optionally absolute |
-| Ch2 | Disk I/O | Sector read+write rate of the most active disk |
+| Ch2 | Disk I/O | Read+write byte rate of the busiest reported disk |
 | Ch3 | Memory | Used memory as percentage of total |
 
 Each channel maps its metric to a PWM value in the 0-255 range with configurable min/max bounds.
@@ -28,13 +28,20 @@ Commands are sent as 4-byte packets: `[0xFD, 0x02, 0x30 + channel, pwm_value]`.
 The `Vu` struct applies delta-smoothing to limit how fast the gauge needle moves per update,
 controlled by `--pwm-max-delta` (default 32). This prevents the needle from jumping erratically.
 
-## Disk I/O (Linux)
+## Disk I/O
 
-Disk statistics are read directly from `/proc/diskstats`, tracking `sd?` (SCSI/SATA) and
-`nvme???` (NVMe) block devices. The rate is calculated as sectors read+written per second
-for the most active disk.
+Disk statistics use `sysinfo` on both Linux and Windows. The gauge shows the largest
+read+write byte rate among the reported disks/volumes, with full scale at 50 MiB/s
+(equivalent to the previous 102400 sectors/s scale). This covers the disks reported by
+`sysinfo`, rather than filtering device names. Newly discovered disks and reset counters
+establish a new baseline without producing a spike. No reported disks means an idle gauge.
 
-On Windows, the disk I/O channel will not produce readings since `/proc/diskstats` is not available.
+Network and disk rates use actual time between samples, so their scales do not depend on
+the chosen sampling frequency. Faster output cadences reuse the latest CPU reading until
+`sysinfo` allows another CPU refresh.
+
+Reported collection or serial errors terminate the program with an error message. Some
+underlying refresh failures are concealed by `sysinfo` and cannot be detected reliably.
 
 ## Usage
 
@@ -49,8 +56,8 @@ perf_meters [OPTIONS]
 | `-p, --port <PORT>` | Serial port device (e.g. `/dev/ttyUSB0`, `COM8`) | required |
 | `-l, --list-ports` | List available serial ports and exit | |
 | `-c, --calibrate` | Enter interactive calibration mode | |
-| `-s, --samplerate <HZ>` | Measurement loop frequency | 5.0 |
-| `--pwm-max-delta <N>` | Max gauge movement per sample (smoothing) | 32 |
+| `-s, --samplerate <HZ>` | Measurement loop frequency, finite and positive, up to 100 Hz | 5.0 |
+| `--pwm-max-delta <N>` | Max gauge movement per sample, 1–255 (smoothing) | 32 |
 | `--cpu-pwm-min / --cpu-pwm-max` | CPU channel PWM range | 0 / 255 |
 | `--net-gauge-abs` | Use absolute network rate (ignore direction) | false |
 | `--net-gauge-mbps <MBPS>` | Network rate that maps to full scale | 100 |
@@ -59,6 +66,17 @@ perf_meters [OPTIONS]
 | `-v, --verbose` | Info-level logging | |
 | `-d, --debug` | Debug-level logging | |
 | `-t, --trace` | Trace-level logging | |
+
+Numeric options are validated before any hardware is opened. PWM calibration endpoints
+must be finite and in 0–255; reversed endpoints are supported for inverted gauges. In signed
+network mode, the zero point must lie between the two endpoints. Network full scale must
+be finite and positive. PWM mapping reaches the configured endpoints and rounds to the
+nearest integer. The startup sweep and CPU weighting are unchanged.
+
+For library users, `MyStats::new`, `MyStats::refresh`, `MyStats::cpu_usage`,
+`MyStats::mem_usage`, `Vu::new`, and `OptsCommon::start_pgm` now return `Result`.
+`MyStats` no longer implements `Default`; `net_bits_per_second` replaces `net_bits`,
+and disk rates are now in bytes per second.
 
 ## Build and Development
 
