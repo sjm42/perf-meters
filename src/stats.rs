@@ -1,18 +1,17 @@
 // stats.rs
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, Networks, RefreshKind, System};
+#[cfg(not(target_os = "linux"))]
+use sysinfo::{DiskRefreshKind, Disks};
 
-use anyhow::{Context, ensure};
-use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
+#[cfg(target_os = "linux")]
+mod linux_disks;
 
-use crate::warn;
+use crate::*;
 
 #[derive(Debug)]
 pub struct DiskStats {
+    #[cfg(not(target_os = "linux"))]
     disks: Disks,
     prev_ts: Instant,
     prev_stats: HashMap<PathBuf, (u64, u64)>,
@@ -20,24 +19,29 @@ pub struct DiskStats {
 }
 
 impl DiskStats {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Result<Self> {
+        #[cfg(not(target_os = "linux"))]
         let disks = Disks::new_with_refreshed_list_specifics(DiskRefreshKind::nothing().with_io_usage())
             .context("Unable to initialize disk statistics")?;
-        let prev_stats = Self::snapshot(&disks);
-        Ok(Self {
+        let mut stats = Self {
+            #[cfg(not(target_os = "linux"))]
             disks,
             prev_ts: Instant::now(),
-            prev_stats,
+            prev_stats: HashMap::new(),
             rates: Vec::new(),
-        })
+        };
+        stats.prev_stats = stats.snapshot().context("Unable to initialize disk statistics")?;
+        stats.prev_ts = Instant::now();
+        Ok(stats)
     }
 
-    pub fn refresh(&mut self) -> anyhow::Result<()> {
+    pub fn refresh(&mut self) -> Result<()> {
+        #[cfg(not(target_os = "linux"))]
         self.disks
             .refresh_specifics(true, DiskRefreshKind::nothing().with_io_usage());
+        let stats = self.snapshot()?;
         let now = Instant::now();
         let elapsed = now.duration_since(self.prev_ts);
-        let stats = Self::snapshot(&self.disks);
         let mut rates = Vec::with_capacity(stats.len());
         for (name, &current) in &stats {
             // A newly discovered disk needs a baseline, not a since-boot rate.
@@ -56,8 +60,15 @@ impl DiskStats {
         &self.rates
     }
 
-    fn snapshot(disks: &Disks) -> HashMap<PathBuf, (u64, u64)> {
-        disks
+    #[cfg(target_os = "linux")]
+    fn snapshot(&self) -> Result<HashMap<PathBuf, (u64, u64)>> {
+        linux_disks::snapshot()
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn snapshot(&self) -> Result<HashMap<PathBuf, (u64, u64)>> {
+        Ok(self
+            .disks
             .iter()
             .map(|disk| {
                 let usage = disk.usage();
@@ -66,11 +77,11 @@ impl DiskStats {
                     (usage.total_read_bytes, usage.total_written_bytes),
                 )
             })
-            .collect()
+            .collect())
     }
 }
 
-fn per_second(amount: f64, elapsed: Duration) -> anyhow::Result<f64> {
+fn per_second(amount: f64, elapsed: Duration) -> Result<f64> {
     ensure!(
         !elapsed.is_zero(),
         "Cannot calculate a rate over a zero sampling interval"
@@ -80,7 +91,7 @@ fn per_second(amount: f64, elapsed: Duration) -> anyhow::Result<f64> {
     Ok(rate)
 }
 
-fn disk_rate(previous: (u64, u64), current: (u64, u64), elapsed: Duration) -> anyhow::Result<f64> {
+fn disk_rate(previous: (u64, u64), current: (u64, u64), elapsed: Duration) -> Result<f64> {
     // Rebaseline after a counter reset or device replacement.
     let (Some(read), Some(written)) = (current.0.checked_sub(previous.0), current.1.checked_sub(previous.1)) else {
         return Ok(0.0);
@@ -88,7 +99,7 @@ fn disk_rate(previous: (u64, u64), current: (u64, u64), elapsed: Duration) -> an
     per_second(read as f64 + written as f64, elapsed)
 }
 
-fn memory_usage(used: u64, total: u64) -> anyhow::Result<f64> {
+fn memory_usage(used: u64, total: u64) -> Result<f64> {
     ensure!(
         total > 0 && used <= total,
         "Invalid memory statistics: used {used}, total {total}"
@@ -108,7 +119,7 @@ pub struct MyStats {
 }
 
 impl MyStats {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Result<Self> {
         let refresh = RefreshKind::nothing()
             .with_cpu(CpuRefreshKind::everything())
             .with_memory(MemoryRefreshKind::everything().without_swap());
@@ -137,7 +148,7 @@ impl MyStats {
         })
     }
 
-    pub fn refresh(&mut self) -> anyhow::Result<()> {
+    pub fn refresh(&mut self) -> Result<()> {
         // Faster output cadences can reuse the last CPU reading.
         if self.cpu_ts.elapsed() >= sysinfo::MINIMUM_CPU_UPDATE_INTERVAL {
             self.sys.refresh_cpu_specifics(CpuRefreshKind::nothing().with_usage());
@@ -172,7 +183,7 @@ impl MyStats {
     }
 
     /// Logical CPU readings, largest first.
-    pub fn cpu_usage(&self) -> anyhow::Result<Vec<f32>> {
+    pub fn cpu_usage(&self) -> Result<Vec<f32>> {
         let mut usages: Vec<_> = self.sys.cpus().iter().map(|cpu| cpu.usage()).collect();
         ensure!(!usages.is_empty(), "No CPU readings available");
         ensure!(usages.iter().all(|value| value.is_finite()), "Non-finite CPU reading");
@@ -190,7 +201,7 @@ impl MyStats {
         self.diskstats.rates().first().copied().unwrap_or(0.0)
     }
 
-    pub fn mem_usage(&self) -> anyhow::Result<f64> {
+    pub fn mem_usage(&self) -> Result<f64> {
         memory_usage(self.sys.used_memory(), self.sys.total_memory())
     }
 }
@@ -235,3 +246,5 @@ mod tests {
         assert!(memory_usage(101, 100).is_err());
     }
 }
+
+// EOF

@@ -2,7 +2,7 @@
 
 [package]
 name = "perf_meters"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2024"
 resolver = "2"
 
@@ -15,6 +15,10 @@ serialport = "4.10"
 sysinfo = "0.40"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = "0.3"
+
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = { version = "0.18", default-features = false }
 
 
 [build-dependencies]

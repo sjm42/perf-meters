@@ -30,11 +30,19 @@ controlled by `--pwm-max-delta` (default 32). This prevents the needle from jump
 
 ## Disk I/O
 
-Disk statistics use `sysinfo` on both Linux and Windows. The gauge shows the largest
-read+write byte rate among the reported disks/volumes, with full scale at 50 MiB/s
-(equivalent to the previous 102400 sectors/s scale). This covers the disks reported by
-`sysinfo`, rather than filtering device names. Newly discovered disks and reset counters
-establish a new baseline without producing a spike. No reported disks means an idle gauge.
+On Linux, disk statistics use `procfs` to read `/proc/diskstats`. Whole physical block
+devices are selected through `/sys/block`, independently of mounted filesystems. This
+includes the backing disks of ZFS pools, LVM volumes, and other storage stacks. Partitions
+and virtual block devices (such as device-mapper, software RAID, and loop devices) are
+excluded; their physical backing disks are counted instead. No device-name patterns or
+ZFS-specific tools are needed. This measures device traffic, so cached reads and buffered
+writes may not immediately move the needle.
+
+Windows and other platforms continue to use `sysinfo` disk statistics. On all platforms,
+the gauge shows the largest read+write byte rate among the selected disks/volumes, with
+full scale at 50 MiB/s (equivalent to the previous 102400 sectors/s scale). Newly discovered
+disks and reset counters establish a new baseline without producing a spike. No reported
+disks means an idle gauge.
 
 Network and disk rates use actual time between samples, so their scales do not depend on
 the chosen sampling frequency. Faster output cadences reuse the latest CPU reading until

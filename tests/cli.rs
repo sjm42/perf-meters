@@ -1,4 +1,6 @@
-use std::process::Command;
+// cli.rs
+
+use perf_meters::Command;
 
 #[test]
 fn invalid_options_fail_before_opening_hardware() {
@@ -53,3 +55,5 @@ fn missing_port_is_an_error_and_help_needs_no_hardware() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("--list-ports"));
 }
+
+// EOF

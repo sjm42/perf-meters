@@ -1,8 +1,4 @@
-// startup.rs
-
-use std::time::Duration;
-
-use anyhow::{Context, ensure};
+// config.rs
 
 use crate::*;
 
@@ -51,7 +47,7 @@ pub struct OptsCommon {
 
 impl OptsCommon {
     /// Check options before opening or moving any hardware.
-    pub fn validate(&self) -> anyhow::Result<()> {
+    pub fn validate(&self) -> Result<()> {
         self.sample_period()?;
         ensure!(
             (1..=255).contains(&self.pwm_max_delta),
@@ -90,7 +86,7 @@ impl OptsCommon {
         Ok(())
     }
 
-    pub fn sample_period(&self) -> anyhow::Result<Duration> {
+    pub fn sample_period(&self) -> Result<Duration> {
         // 100 Hz keeps serial output comfortably below the 115200-baud link capacity.
         ensure!(
             self.samplerate.is_finite() && self.samplerate > 0.0 && self.samplerate <= 100.0,
@@ -112,12 +108,12 @@ impl OptsCommon {
         }
     }
 
-    pub fn start_pgm(&self, name: &str) -> anyhow::Result<()> {
+    pub fn start_pgm(&self, name: &str) -> Result<()> {
         tracing_subscriber::fmt()
             .with_max_level(self.get_loglevel())
             .with_target(false)
             .try_init()
-            .map_err(|error| anyhow::anyhow!("Unable to initialize logging: {error}"))?;
+            .map_err(|error| anyhow!("Unable to initialize logging: {error}"))?;
 
         info!("Starting up {name} v{}...", env!("CARGO_PKG_VERSION"));
         debug!("Git branch: {}", env!("GIT_BRANCH"));

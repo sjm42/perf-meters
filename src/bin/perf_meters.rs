@@ -1,10 +1,7 @@
-// bin/perf-meters.rs
+// perf_meters.rs
 
-use std::{thread, time};
-
-use anyhow::{Context, ensure};
 use console::{Key, Term};
-use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
+use serialport::{DataBits, FlowControl, Parity, StopBits};
 
 use perf_meters::*;
 
@@ -12,7 +9,7 @@ const BAUD_RATE: u32 = 115200;
 // Preserve the old 102400 sectors/s scale, using 512-byte Linux accounting sectors.
 const DISK_FULL_SCALE_BPS: f64 = 50.0 * 1024.0 * 1024.0;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     let opts = OptsCommon::parse();
     opts.validate()?;
     opts.start_pgm(env!("CARGO_BIN_NAME"))?;
@@ -98,7 +95,7 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn cpu_gauge(rates: &[f32], cores: usize) -> anyhow::Result<f64> {
+fn cpu_gauge(rates: &[f32], cores: usize) -> Result<f64> {
     ensure!(rates.iter().all(|value| value.is_finite()), "Non-finite CPU reading");
     // Keep the original physical-core weighting, but require the readings used by it.
     let gauge = match (cores, rates) {
@@ -106,13 +103,13 @@ fn cpu_gauge(rates: &[f32], cores: usize) -> anyhow::Result<f64> {
         (4..=5, [a, b, c, d, ..]) => (a + b) / 2.0 + (c + d) * 0.80,
         (2..=3, [a, b, ..]) => (a + b) / 2.0 * 2.56,
         (1, [a, ..]) => a * 2.56,
-        _ => anyhow::bail!("Insufficient CPU readings for {cores} cores: got {}", rates.len()),
+        _ => bail!("Insufficient CPU readings for {cores} cores: got {}", rates.len()),
     };
     ensure!(gauge.is_finite(), "Non-finite CPU gauge");
     Ok(f64::from(gauge.clamp(0.0, 255.0)))
 }
 
-fn pwm(fraction: f64, min: f32, max: f32) -> anyhow::Result<i16> {
+fn pwm(fraction: f64, min: f32, max: f32) -> Result<i16> {
     ensure!(fraction.is_finite(), "Non-finite gauge reading");
     ensure!(
         min.is_finite() && max.is_finite() && (0.0..=255.0).contains(&min) && (0.0..=255.0).contains(&max),
@@ -122,7 +119,7 @@ fn pwm(fraction: f64, min: f32, max: f32) -> anyhow::Result<i16> {
     Ok(value.round() as i16)
 }
 
-fn network_pwm(rate: f64, opts: &OptsCommon) -> anyhow::Result<i16> {
+fn network_pwm(rate: f64, opts: &OptsCommon) -> Result<i16> {
     let fraction = rate / (f64::from(opts.net_gauge_mbps) * 1_000_000.0);
     if opts.net_gauge_abs {
         pwm(fraction.abs(), opts.net_pwm_min, opts.net_pwm_max)
@@ -133,7 +130,7 @@ fn network_pwm(rate: f64, opts: &OptsCommon) -> anyhow::Result<i16> {
     }
 }
 
-fn hello(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+fn hello(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> Result<()> {
     for i in (0i16..=255)
         .chain((128..=255).rev())
         .chain(128..=255)
@@ -147,13 +144,13 @@ fn hello(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn calibrate(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> anyhow::Result<()> {
+fn calibrate(vu: &mut Vu, ser: &mut Box<dyn SerialPort>) -> Result<()> {
     let mut chan = Channel::Ch0;
     let mut gauges: [i16; N_CHANS] = [1; _];
     warn!("Entering calibration mode.\r\nUse arrow keys left/right to change channel.\r\nUse up/down to move gauge.");
     warn!("Press Esc to quit.");
     let term = Term::stdout();
-    let mut stderr = std::io::stderr().lock();
+    let mut stderr = io::stderr().lock();
     loop {
         write!(stderr, "\rChan: {chan:?} gauges: {gauges:?}")?;
         stderr.flush()?;

@@ -1,9 +1,21 @@
 // lib.rs
 
-pub use std::io::Write;
+pub use std::{
+    collections::HashMap,
+    io::{self, Write},
+    path::PathBuf,
+    process::Command,
+    thread,
+    time::{self, Duration, Instant},
+};
+#[cfg(target_os = "linux")]
+pub use std::{
+    collections::HashSet,
+    ffi::{OsStr, OsString},
+    fs,
+};
 
-use anyhow::{Context, ensure};
-
+pub use anyhow::{Context, Result, anyhow, bail, ensure};
 pub use clap::Parser;
 pub use serialport::SerialPort;
 pub use tracing::*;
@@ -48,7 +60,7 @@ pub struct Vu {
     max_delta: i16,
 }
 impl Vu {
-    pub fn new(max_delta: i16) -> anyhow::Result<Self> {
+    pub fn new(max_delta: i16) -> Result<Self> {
         ensure!((1..=255).contains(&max_delta), "Maximum PWM delta must be in 1..=255");
         Ok(Self {
             last_val: [0; _],
@@ -56,7 +68,7 @@ impl Vu {
         })
     }
 
-    pub fn set<W: Write + ?Sized>(&mut self, ser: &mut W, channel: Channel, pwm: i16) -> anyhow::Result<()> {
+    pub fn set<W: Write + ?Sized>(&mut self, ser: &mut W, channel: Channel, pwm: i16) -> Result<()> {
         let ch_i = channel as usize;
 
         // limit to gauge values between 0..255
@@ -78,8 +90,6 @@ impl Vu {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
-
     use super::*;
 
     #[test]
